@@ -335,6 +335,46 @@ sys_open(void)
     }
   }
 
+  if(ip->type == T_SYMLINK){
+    if(omode & O_NOFOLLOW){
+      ;// 网上参考的代码都无视了这种情况，不知道为什么。
+    }else{
+      int depth = 0;
+      int depth_threshold = 30;
+      printf("start\n");
+      while(1){
+        // 深度检查
+        if(depth > depth_threshold){
+          iunlockput(ip);
+          end_op();
+          printf("---\n");
+          return -1;
+        }
+        printf("111\n");
+
+        // 读当前inode里面的字符串（目标文件名）
+        readi(ip, 0, (uint64)path, 0, MAXPATH);
+        iunlockput(ip);
+        printf("222\n");
+        printf("%s\n", path);
+
+        // 目标inode
+        if((ip = namei(path)) == 0){
+          end_op();
+          return -1;
+        }
+        ilock(ip);
+        printf("333\n");
+
+        // 是否继续
+        if(ip->type != T_SYMLINK)
+          break;
+        depth++ ;
+        printf("444\n");
+      }
+    }
+  }
+
   if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
     iunlockput(ip);
     end_op();
@@ -501,5 +541,24 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+uint64
+sys_symlink(void){
+  char new[MAXPATH], old[MAXPATH];
+  struct inode *ip_old, *ip_new;
+
+  if(argstr(0, old, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0)
+    return -1;
+
+  begin_op();
+
+  ip_old = namei(old);
+  ip_new = create(new, T_SYMLINK, ip_old->major, ip_old->minor);
+  writei(ip_new, 0, (uint64)old, 0, strlen(old));
+  iunlockput(ip_new);
+
+  end_op();
   return 0;
 }
