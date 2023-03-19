@@ -76,16 +76,18 @@ testsymlink(void)
 
   if (stat_slink("/testsymlink/b", &st) != 0)
     fail("failed to stat b");
-  if(st.type != T_SYMLINK)
+  if(st.type != T_SYMLINK){
+    // printf("B type is %d\n", st.type);
     fail("b isn't a symlink");
-
+  }
+  printf("---1---");
   fd2 = open("/testsymlink/b", O_RDWR);
   if(fd2 < 0)
     fail("failed to open b");
   read(fd2, &c, 1);
   if (c != 'a')
     fail("failed to read bytes from b");
-
+printf("---2---");
   unlink("/testsymlink/a");
   if(open("/testsymlink/b", O_RDWR) >= 0)
     fail("Should not be able to open b after deleting a");
@@ -93,29 +95,33 @@ testsymlink(void)
   r = symlink("/testsymlink/b", "/testsymlink/a");
   if(r < 0)
     fail("symlink a -> b failed");
-
+printf("---3---");
   r = open("/testsymlink/b", O_RDWR);
   if(r >= 0)
     fail("Should not be able to open b (cycle b->a->b->..)\n");
-  
+  printf("---3.5---");
   r = symlink("/testsymlink/nonexistent", "/testsymlink/c");
+  printf("---3.6---");
   if(r != 0)
     fail("Symlinking to nonexistent file should succeed\n");
-
+printf("---4---");
   r = symlink("/testsymlink/2", "/testsymlink/1");
   if(r) fail("Failed to link 1->2");
   r = symlink("/testsymlink/3", "/testsymlink/2");
   if(r) fail("Failed to link 2->3");
   r = symlink("/testsymlink/4", "/testsymlink/3");
   if(r) fail("Failed to link 3->4");
+printf("---5---");
 
   close(fd1);
   close(fd2);
+printf("---6---");
 
   fd1 = open("/testsymlink/4", O_CREATE | O_RDWR);
   if(fd1<0) fail("Failed to create 4\n");
   fd2 = open("/testsymlink/1", O_RDWR);
   if(fd2<0) fail("Failed to open 1\n");
+printf("---7---");
 
   c = '#';
   r = write(fd2, &c, 1);
@@ -124,6 +130,7 @@ testsymlink(void)
   if(r!=1) fail("Failed to read from 4\n");
   if(c!=c2)
     fail("Value read from 4 differed from value written to 1\n");
+printf("---8---");
 
   printf("test symlinks: ok\n");
 done:

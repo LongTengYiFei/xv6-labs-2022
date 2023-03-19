@@ -245,6 +245,7 @@ bad:
 static struct inode*
 create(char *path, short type, short major, short minor)
 {
+  // printf("sys create - type %d\n", type);
   struct inode *ip, *dp;
   char name[DIRSIZ];
 
@@ -261,11 +262,13 @@ create(char *path, short type, short major, short minor)
     iunlockput(ip);
     return 0;
   }
-
+  // printf("sys create pending ialloc\n");
   if((ip = ialloc(dp->dev, type)) == 0){
     iunlockput(dp);
     return 0;
   }
+  
+  // printf("sys create ialloc over ip.type:%d\n", ip->type);
 
   ilock(ip);
   ip->major = major;
@@ -323,55 +326,41 @@ sys_open(void)
       return -1;
     }
   } else {
-    if((ip = namei(path)) == 0){
-      end_op();
-      return -1;
-    }
-    ilock(ip);
-    if(ip->type == T_DIR && omode != O_RDONLY){
-      iunlockput(ip);
-      end_op();
-      return -1;
-    }
-  }
-
-  if(ip->type == T_SYMLINK){
-    if(omode & O_NOFOLLOW){
-      ;// 网上参考的代码都无视了这种情况，不知道为什么。
-    }else{
-      int depth = 0;
-      int depth_threshold = 30;
-      printf("start\n");
-      while(1){
-        // 深度检查
-        if(depth > depth_threshold){
-          iunlockput(ip);
-          end_op();
-          printf("---\n");
-          return -1;
-        }
-        printf("111\n");
-
-        // 读当前inode里面的字符串（目标文件名）
-        readi(ip, 0, (uint64)path, 0, MAXPATH);
-        iunlockput(ip);
-        printf("222\n");
-        printf("%s\n", path);
-
+    int depth = 0;
+    int depth_threshold = 30;
+    while(1){
         // 目标inode
         if((ip = namei(path)) == 0){
           end_op();
           return -1;
         }
         ilock(ip);
-        printf("333\n");
 
         // 是否继续
-        if(ip->type != T_SYMLINK)
+        if(ip->type != T_SYMLINK || (omode & O_NOFOLLOW))
           break;
+
+        // 深度检查
+        if(depth > depth_threshold){
+          iunlockput(ip);
+          end_op();
+          return -1;
+        }
+
+        // 读当前inode里面的字符串（目标文件名）
+        if(readi(ip, 0, (uint64)path, 0, MAXPATH) < 0){
+          iunlockput(ip);
+          end_op();
+          return -1;
+        }
+        iunlockput(ip);
         depth++ ;
-        printf("444\n");
-      }
+    }
+
+    if(ip->type == T_DIR && omode != O_RDONLY){
+      iunlockput(ip);
+      end_op();
+      return -1;
     }
   }
 
@@ -547,18 +536,29 @@ sys_pipe(void)
 uint64
 sys_symlink(void){
   char new[MAXPATH], old[MAXPATH];
-  struct inode *ip_old, *ip_new;
-
+  struct inode *ip_new;
+  // 题目没要求目标文件存在，打不开目标文件也不用报错，直接把目标文件名字存入符号链接就行。
   if(argstr(0, old, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0)
     return -1;
 
   begin_op();
 
-  ip_old = namei(old);
-  ip_new = create(new, T_SYMLINK, ip_old->major, ip_old->minor);
-  writei(ip_new, 0, (uint64)old, 0, strlen(old));
-  iunlockput(ip_new);
+  // printf("sys symlink: %s\n", new);
+  ip_new = create(new, T_SYMLINK, 0, 0);
+  // printf("sys symlink over\n");
+  // ip_new = create(new, T_SYMLINK, 0, 0);
+  if(ip_new == 0){
+    end_op();
+    return -1;
+  }
 
+  if(writei(ip_new, 0, (uint64)old, 0, strlen(old)) < 0){
+    end_op();
+    return -1;
+  }
+  
+  iunlockput(ip_new);
   end_op();
+  // printf("syslink over, type:%d\n", ip_new->type);
   return 0;
 }

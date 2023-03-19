@@ -198,6 +198,7 @@ static struct inode* iget(uint dev, uint inum);
 struct inode*
 ialloc(uint dev, short type)
 {
+  // printf("ialloc - type: %d\n", type);
   int inum;
   struct buf *bp;
   struct dinode *dip;
@@ -214,7 +215,7 @@ ialloc(uint dev, short type)
     }
     brelse(bp);
   }
-  printf("ialloc: no inodes\n");
+  // printf("ialloc: no inodes\n");
   return 0;
 }
 
